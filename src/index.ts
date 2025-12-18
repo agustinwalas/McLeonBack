@@ -56,6 +56,11 @@ app.get("/", (req, res) => {
   res.send("API del restaurante funcionando 🍣");
 });
 
+// Healthcheck endpoint para Railway
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Rutas principales
 app.use("/api", authRoutes);
 app.use("/api/user", userRouter);

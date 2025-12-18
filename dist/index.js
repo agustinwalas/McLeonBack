@@ -23,9 +23,6 @@ const category_routes_1 = __importDefault(require("./routes/category.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const sale_routes_1 = __importDefault(require("./routes/sale.routes"));
 const marginConfig_routes_1 = __importDefault(require("./routes/marginConfig.routes"));
-const shopify_routes_1 = __importDefault(require("./routes/shopify.routes"));
-const shopifyCollection_routes_1 = __importDefault(require("./routes/shopifyCollection.routes"));
-const shopifySales_routes_1 = __importDefault(require("./routes/shopifySales.routes"));
 const afip_routes_1 = __importDefault(require("./routes/afip.routes"));
 const note_routes_1 = __importDefault(require("./routes/note.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
@@ -54,6 +51,10 @@ app.use(express_1.default.json());
 app.get("/", (req, res) => {
     res.send("API del restaurante funcionando 🍣");
 });
+// Healthcheck endpoint para Railway
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 // Rutas principales
 app.use("/api", auth_routes_1.default);
 app.use("/api/user", user_routes_1.default);
@@ -64,9 +65,6 @@ app.use("/api/suppliers", supplier_routes_1.default);
 app.use("/api/supplier-invoices", supplierInvoice_routes_1.default);
 app.use("/api/sales", sale_routes_1.default);
 app.use("/api/marginConfig", marginConfig_routes_1.default);
-app.use("/api/shopify", shopify_routes_1.default);
-app.use("/api/shopify-collections", shopifyCollection_routes_1.default);
-app.use("/api/shopify-sales", shopifySales_routes_1.default);
 app.use("/api/afip", afip_routes_1.default);
 app.use("/api/notes", note_routes_1.default);
 app.use("/api/dashboard", dashboard_routes_1.default);
