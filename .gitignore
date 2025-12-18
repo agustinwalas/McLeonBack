@@ -1,0 +1,4 @@
+.env
+
+# Scripts de autorización AFIP con contraseñas
+authorize-afip-webservice.js
