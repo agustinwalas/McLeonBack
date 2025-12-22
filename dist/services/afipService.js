@@ -284,14 +284,8 @@ class AfipService {
     }
     // Calcular IVA según tipo de comprobante
     calculateTax(neto, tipoComprobante) {
-        switch (tipoComprobante) {
-            case 1: // Factura A
-            case 6: // Factura B
-                return Math.round(neto * 0.21 * 100) / 100; // 21% IVA, redondear a 2 decimales
-            case 11: // Factura C
-            default:
-                return 0; // No discrimina IVA
-        }
+        // IVA siempre en 0% para todos los tipos de comprobante
+        return 0;
     }
     // Obtener nombre del tipo de comprobante
     getInvoiceTypeName(tipoComprobante) {

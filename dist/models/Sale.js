@@ -105,6 +105,12 @@ const SaleSchema = new mongoose_1.Schema({
         required: true,
         min: 0
     },
+    amountPaid: {
+        type: Number,
+        required: true,
+        default: 0,
+        min: 0
+    },
     paymentMethod: {
         type: String,
         enum: ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'CHEQUE'],

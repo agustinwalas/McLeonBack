@@ -77,6 +77,7 @@ class SaleController {
                 products: products,
                 subtotal: subtotal,
                 totalAmount: totalAmount,
+                amountPaid: req.body.amountPaid || 0,
                 paymentMethod: paymentMethod,
                 deliveryType: deliveryType,
                 deliveryFee: deliveryFee || 0,

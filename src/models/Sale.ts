@@ -18,6 +18,7 @@ export interface ISale extends Document {
   subtotal: number;
   totalDiscount: number;
   totalAmount: number;
+  amountPaid: number;
   paymentMethod: 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CHEQUE';
   deliveryType: 'RETIRO_LOCAL' | 'DELIVERY';
   deliveryFee: number;
@@ -109,6 +110,12 @@ const SaleSchema = new Schema({
   totalAmount: {
     type: Number,
     required: true,
+    min: 0
+  },
+  amountPaid: {
+    type: Number,
+    required: true,
+    default: 0,
     min: 0
   },
   paymentMethod: {

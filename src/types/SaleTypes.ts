@@ -56,6 +56,7 @@ export interface ISale {
   subtotal: number; // Suma de todos los subtotales
   totalDiscount: number; // Descuento total aplicado
   totalAmount: number; // Precio final
+  amountPaid: number; // Monto pagado
   paymentMethod: PaymentMethod;
   deliveryType: DeliveryType;
   deliveryAddress?: IDeliveryAddress;
