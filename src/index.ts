@@ -78,10 +78,19 @@ app.use("/api/dashboard", dashboardRoutes);
 // ==============================
 //  CONEXIÓN A MONGODB
 // ==============================
+console.log('🔍 Verificando variables de entorno:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('MONGO_URI existe?:', !!process.env.MONGO_URI);
+console.log('MONGO_URI (primeros 50 chars):', process.env.MONGO_URI?.substring(0, 50));
+console.log('JWT_SECRET existe?:', !!process.env.JWT_SECRET);
+console.log('CLIENT_ORIGIN:', process.env.CLIENT_ORIGIN);
+
 const { MONGO_URI } = process.env;
 
 if (!MONGO_URI) {
   console.error('❌ ERROR: MONGO_URI no está definida en las variables de entorno');
+  console.error('Variables disponibles:', Object.keys(process.env).sort().join(', '));
   process.exit(1);
 }
 
