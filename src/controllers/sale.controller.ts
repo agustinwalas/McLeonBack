@@ -395,4 +395,35 @@ export class SaleController {
         .json({ message: "Error al obtener ventas por método de pago", error });
     }
   }
+
+  // PATCH - Actualizar pago de venta (pagar deuda)
+  static async updatePayment(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { amountPaid } = req.body;
+
+      if (amountPaid === undefined || amountPaid === null) {
+        res.status(400).json({ message: "amountPaid es requerido" });
+        return;
+      }
+
+      const sale = await Sale.findByIdAndUpdate(
+        id,
+        { amountPaid },
+        { new: true, runValidators: true }
+      )
+        .populate("client")
+        .populate("user")
+        .populate("products.product");
+
+      if (!sale) {
+        res.status(404).json({ message: "Venta no encontrada" });
+        return;
+      }
+
+      res.json(sale);
+    } catch (error) {
+      res.status(500).json({ message: "Error al actualizar el pago", error });
+    }
+  }
 }

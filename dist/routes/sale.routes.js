@@ -17,5 +17,6 @@ router.get("/:id", sale_controller_1.SaleController.getSaleById);
 // Rutas de modificación
 router.post("/", sale_controller_1.SaleController.createSale);
 router.put("/:id", sale_controller_1.SaleController.updateSale);
+router.patch("/:id", sale_controller_1.SaleController.updatePayment);
 router.delete("/:id", sale_controller_1.SaleController.deleteSale);
 exports.default = router;
