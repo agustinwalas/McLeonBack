@@ -23,6 +23,8 @@ import marginConfigRoutes from "./routes/marginConfig.routes";
 import afipRoutes from "./routes/afip.routes";
 import noteRoutes from "./routes/note.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import dailyProfitRoutes from "./routes/dailyProfit.routes";
+import { initDailyProfitCron } from "./services/dailyProfitCron";
 
 const app = express();
 const server = http.createServer(app);
@@ -74,6 +76,7 @@ app.use("/api/marginConfig", marginConfigRoutes);
 app.use("/api/afip", afipRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/daily-profits", dailyProfitRoutes);
 
 // ==============================
 //  CONEXIÓN A MONGODB
@@ -102,6 +105,8 @@ mongoose
   } as any)
   .then(() => {
     console.log('✅ Conectado a MongoDB');
+    // Inicializar cron de ganancias diarias después de conectar a MongoDB
+    initDailyProfitCron();
   })
   .catch((err: any) => {
     console.error('❌ Error al conectar a MongoDB:', err.message);

@@ -26,6 +26,8 @@ const marginConfig_routes_1 = __importDefault(require("./routes/marginConfig.rou
 const afip_routes_1 = __importDefault(require("./routes/afip.routes"));
 const note_routes_1 = __importDefault(require("./routes/note.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
+const dailyProfit_routes_1 = __importDefault(require("./routes/dailyProfit.routes"));
+const dailyProfitCron_1 = require("./services/dailyProfitCron");
 const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
 // Configuración de Socket.io con CORS
@@ -68,6 +70,7 @@ app.use("/api/marginConfig", marginConfig_routes_1.default);
 app.use("/api/afip", afip_routes_1.default);
 app.use("/api/notes", note_routes_1.default);
 app.use("/api/dashboard", dashboard_routes_1.default);
+app.use("/api/daily-profits", dailyProfit_routes_1.default);
 // ==============================
 //  CONEXIÓN A MONGODB
 // ==============================
@@ -92,6 +95,8 @@ mongoose_1.default
 })
     .then(() => {
     console.log('✅ Conectado a MongoDB');
+    // Inicializar cron de ganancias diarias después de conectar a MongoDB
+    (0, dailyProfitCron_1.initDailyProfitCron)();
 })
     .catch((err) => {
     console.error('❌ Error al conectar a MongoDB:', err.message);
