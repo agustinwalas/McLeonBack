@@ -66,13 +66,26 @@ async function fillMissingDays() {
       existingDays.map((d) => d.date.toISOString().split('T')[0])
     );
 
-    // Calcular para los días faltantes
+    // Obtener días con $0 que podrían tener ventas reales
+    const zeroDays = await DailyProfit.find({
+      date: { $gte: startDate, $lte: today },
+      salesCount: 0,
+    }).select('date').lean();
+
+    const zeroDatesSet = new Set(
+      zeroDays.map((d) => d.date.toISOString().split('T')[0])
+    );
+
+    // Calcular para los días faltantes o que tienen $0 pero podrían tener ventas
     let missingDays = 0;
     const currentDate = new Date(startDate);
 
     while (currentDate <= today) {
       const dateStr = currentDate.toISOString().split('T')[0];
-      if (!existingDatesSet.has(dateStr)) {
+      const isMissing = !existingDatesSet.has(dateStr);
+      const isZeroDay = zeroDatesSet.has(dateStr);
+
+      if (isMissing || isZeroDay) {
         await DailyProfitController.saveDailyProfit(new Date(currentDate));
         missingDays++;
       }
@@ -80,7 +93,7 @@ async function fillMissingDays() {
     }
 
     if (missingDays > 0) {
-      console.log(`✅ Se completaron ${missingDays} días faltantes de ganancias`);
+      console.log(`✅ Se completaron/recalcularon ${missingDays} días de ganancias`);
     } else {
       console.log('ℹ️ Todos los días de ganancias están al día');
     }

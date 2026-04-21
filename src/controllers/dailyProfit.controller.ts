@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import DailyProfit from "../models/DailyProfit";
 import Sale from "../models/Sale";
 import Product from "../models/Product";
+import SupplierInvoice from "../models/SupplierInvoice";
 import mongoose from "mongoose";
 
 export class DailyProfitController {
@@ -180,9 +181,70 @@ export class DailyProfitController {
         },
       ]);
 
+      // Aggregation de facturas de proveedores por mes
+      const invoiceMatchStage: any = {};
+      if (year) {
+        const yearNum = parseInt(year as string);
+        invoiceMatchStage.date = {
+          $gte: new Date(`${yearNum}-01-01T00:00:00.000Z`),
+          $lte: new Date(`${yearNum}-12-31T23:59:59.999Z`),
+        };
+      }
+
+      const supplierInvoicesByMonth = await SupplierInvoice.aggregate([
+        { $match: invoiceMatchStage },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$date' },
+              month: { $month: '$date' },
+            },
+            supplierInvoicesTotal: { $sum: '$amount' },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            year: '$_id.year',
+            month: '$_id.month',
+            supplierInvoicesTotal: { $round: ['$supplierInvoicesTotal', 2] },
+          },
+        },
+      ]);
+
+      // Merge: combinar ganancias con facturas de proveedores
+      const invoicesMap = new Map(
+        supplierInvoicesByMonth.map((inv) => [`${inv.year}-${inv.month}`, inv.supplierInvoicesTotal])
+      );
+
+      const data = monthlyProfits.map((mp) => ({
+        ...mp,
+        supplierInvoicesTotal: invoicesMap.get(`${mp.year}-${mp.month}`) ?? 0,
+      }));
+
+      // Incluir meses que solo tienen facturas de proveedores (sin ventas)
+      for (const inv of supplierInvoicesByMonth) {
+        const key = `${inv.year}-${inv.month}`;
+        if (!data.find((d) => `${d.year}-${d.month}` === key)) {
+          data.push({
+            year: inv.year,
+            month: inv.month,
+            totalBaseCost: 0,
+            totalSaleAmount: 0,
+            totalProfit: 0,
+            salesCount: 0,
+            daysWithSales: 0,
+            supplierInvoicesTotal: inv.supplierInvoicesTotal,
+          });
+        }
+      }
+
+      // Re-ordenar por año y mes descendente
+      data.sort((a, b) => b.year - a.year || b.month - a.month);
+
       res.json({
         success: true,
-        data: monthlyProfits,
+        data,
       });
     } catch (error) {
       console.error('❌ Error al obtener ganancias mensuales:', error);
