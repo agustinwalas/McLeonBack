@@ -4,6 +4,8 @@ import { DailyProfitController } from '../controllers/dailyProfit.controller';
 import DailyProfit from '../models/DailyProfit';
 import Sale from '../models/Sale';
 
+const normalize = (d: Date) => DailyProfitController.normalizeToUTCDay(d);
+
 /**
  * Inicializa el cron job que calcula las ganancias diarias.
  * - Corre todos los días a las 23:59
@@ -16,9 +18,7 @@ export function initDailyProfitCron() {
   cron.schedule('59 23 * * *', async () => {
     try {
       console.log('⏰ [CRON] Calculando ganancias del día...');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      await DailyProfitController.saveDailyProfit(today);
+      await DailyProfitController.saveDailyProfit(normalize(new Date()));
       console.log('✅ [CRON] Ganancias del día calculadas correctamente');
     } catch (error) {
       console.error('❌ [CRON] Error al calcular ganancias diarias:', error);
@@ -37,11 +37,10 @@ export function initDailyProfitCron() {
 
 /**
  * Verifica si hay días sin registro desde la primera venta hasta hoy
- * y calcula las ganancias para esos días faltantes
+ * y calcula las ganancias para esos días faltantes o recientes.
  */
 async function fillMissingDays() {
   try {
-    // Obtener la primera venta
     const firstSale = await Sale.findOne({ status: { $ne: 'CANCELLED' } })
       .sort({ createdAt: 1 })
       .select('createdAt');
@@ -51,13 +50,13 @@ async function fillMissingDays() {
       return;
     }
 
-    const startDate = new Date(firstSale.createdAt);
-    startDate.setHours(0, 0, 0, 0);
+    const startDate = normalize(new Date(firstSale.createdAt));
+    const today = normalize(new Date());
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Umbral para recálculo de días recientes (últimos 30 días)
+    const recentThreshold = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Obtener todos los días que ya tienen registro
+    // Obtener fechas ya registradas usando clave UTC YYYY-MM-DD
     const existingDays = await DailyProfit.find({
       date: { $gte: startDate, $lte: today },
     }).select('date').lean();
@@ -66,39 +65,30 @@ async function fillMissingDays() {
       existingDays.map((d) => d.date.toISOString().split('T')[0])
     );
 
-    // Obtener días con $0 que podrían tener ventas reales
-    const zeroDays = await DailyProfit.find({
-      date: { $gte: startDate, $lte: today },
-      salesCount: 0,
-    }).select('date').lean();
-
-    const zeroDatesSet = new Set(
-      zeroDays.map((d) => d.date.toISOString().split('T')[0])
-    );
-
-    // Calcular para los días faltantes o que tienen $0 pero podrían tener ventas
-    let missingDays = 0;
-    const currentDate = new Date(startDate);
+    let processed = 0;
+    let currentDate = new Date(startDate);
 
     while (currentDate <= today) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const isMissing = !existingDatesSet.has(dateStr);
-      const isZeroDay = zeroDatesSet.has(dateStr);
+      const isRecent = currentDate >= recentThreshold;
 
-      if (isMissing || isZeroDay) {
+      if (isMissing || isRecent) {
         await DailyProfitController.saveDailyProfit(new Date(currentDate));
-        missingDays++;
+        processed++;
       }
-      currentDate.setDate(currentDate.getDate() + 1);
+
+      // Avanzar un día en UTC (sin depender del timezone local)
+      currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
     }
 
-    if (missingDays > 0) {
-      console.log(`✅ Se completaron/recalcularon ${missingDays} días de ganancias`);
+    if (processed > 0) {
+      console.log(`✅ Se completaron/recalcularon ${processed} días de ganancias`);
     } else {
       console.log('ℹ️ Todos los días de ganancias están al día');
     }
 
-    // También recalcular hoy por si hubo ventas nuevas
+    // Siempre recalcular hoy al arrancar
     await DailyProfitController.saveDailyProfit(today);
   } catch (error) {
     console.error('❌ Error al completar días faltantes:', error);

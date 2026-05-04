@@ -7,17 +7,21 @@ exports.DailyProfitController = void 0;
 const DailyProfit_1 = __importDefault(require("../models/DailyProfit"));
 const Sale_1 = __importDefault(require("../models/Sale"));
 const SupplierInvoice_1 = __importDefault(require("../models/SupplierInvoice"));
+const Expense_1 = __importDefault(require("../models/Expense"));
 class DailyProfitController {
     /**
      * Calcula las ganancias de un día específico
      * Busca todas las ventas CONFIRMED/DELIVERED de ese día,
      * obtiene el purchaseCost de cada producto y calcula la diferencia
      */
+    static normalizeToUTCDay(date) {
+        const iso = date.toISOString().split('T')[0];
+        return new Date(iso + 'T00:00:00.000Z');
+    }
     static async calculateDailyProfit(date) {
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(date);
-        endOfDay.setHours(23, 59, 59, 999);
+        const startOfDay = DailyProfitController.normalizeToUTCDay(date);
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setUTCHours(23, 59, 59, 999);
         // Obtener todas las ventas del día que no estén canceladas
         const sales = await Sale_1.default.find({
             createdAt: { $gte: startOfDay, $lte: endOfDay },
@@ -46,8 +50,7 @@ class DailyProfitController {
      * Guarda o actualiza la ganancia diaria para una fecha
      */
     static async saveDailyProfit(date) {
-        const normalizedDate = new Date(date);
-        normalizedDate.setHours(0, 0, 0, 0);
+        const normalizedDate = DailyProfitController.normalizeToUTCDay(date);
         const profitData = await DailyProfitController.calculateDailyProfit(normalizedDate);
         await DailyProfit_1.default.findOneAndUpdate({ date: normalizedDate }, {
             date: normalizedDate,
@@ -75,16 +78,18 @@ class DailyProfitController {
                 });
                 return;
             }
-            const startDate = new Date(firstSale.createdAt);
-            startDate.setHours(0, 0, 0, 0);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const startDate = DailyProfitController.normalizeToUTCDay(new Date(firstSale.createdAt));
+            const today = DailyProfitController.normalizeToUTCDay(new Date());
+            // Eliminar todos los registros existentes para evitar duplicados por timezone
+            await DailyProfit_1.default.deleteMany({});
+            console.log('🗑️ Registros DailyProfit eliminados para recalcular desde cero');
             let daysProcessed = 0;
-            const currentDate = new Date(startDate);
+            let currentDate = new Date(startDate);
             while (currentDate <= today) {
                 await DailyProfitController.saveDailyProfit(new Date(currentDate));
                 daysProcessed++;
-                currentDate.setDate(currentDate.getDate() + 1);
+                // Avanzar un día en UTC sin depender del timezone local
+                currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
             }
             console.log(`✅ Migración completada. ${daysProcessed} días procesados.`);
             res.json({
@@ -148,23 +153,20 @@ class DailyProfitController {
                     },
                 },
             ]);
-            // Aggregation de facturas de proveedores por mes
-            const invoiceMatchStage = {};
+            const dateMatchStage = {};
             if (year) {
                 const yearNum = parseInt(year);
-                invoiceMatchStage.date = {
+                dateMatchStage.date = {
                     $gte: new Date(`${yearNum}-01-01T00:00:00.000Z`),
                     $lte: new Date(`${yearNum}-12-31T23:59:59.999Z`),
                 };
             }
+            // Aggregation de facturas de proveedores por mes
             const supplierInvoicesByMonth = await SupplierInvoice_1.default.aggregate([
-                { $match: invoiceMatchStage },
+                { $match: dateMatchStage },
                 {
                     $group: {
-                        _id: {
-                            year: { $year: '$date' },
-                            month: { $month: '$date' },
-                        },
+                        _id: { year: { $year: '$date' }, month: { $month: '$date' } },
                         supplierInvoicesTotal: { $sum: '$amount' },
                     },
                 },
@@ -177,29 +179,60 @@ class DailyProfitController {
                     },
                 },
             ]);
-            // Merge: combinar ganancias con facturas de proveedores
+            // Aggregation de gastos por mes
+            const expensesByMonth = await Expense_1.default.aggregate([
+                { $match: dateMatchStage },
+                {
+                    $group: {
+                        _id: { year: { $year: '$date' }, month: { $month: '$date' } },
+                        expensesTotal: { $sum: '$amount' },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        year: '$_id.year',
+                        month: '$_id.month',
+                        expensesTotal: { $round: ['$expensesTotal', 2] },
+                    },
+                },
+            ]);
             const invoicesMap = new Map(supplierInvoicesByMonth.map((inv) => [`${inv.year}-${inv.month}`, inv.supplierInvoicesTotal]));
-            const data = monthlyProfits.map((mp) => ({
-                ...mp,
-                supplierInvoicesTotal: invoicesMap.get(`${mp.year}-${mp.month}`) ?? 0,
-            }));
-            // Incluir meses que solo tienen facturas de proveedores (sin ventas)
-            for (const inv of supplierInvoicesByMonth) {
-                const key = `${inv.year}-${inv.month}`;
+            const expensesMap = new Map(expensesByMonth.map((exp) => [`${exp.year}-${exp.month}`, exp.expensesTotal]));
+            const data = monthlyProfits.map((mp) => {
+                const supplierInvoicesTotal = invoicesMap.get(`${mp.year}-${mp.month}`) ?? 0;
+                const expensesTotal = expensesMap.get(`${mp.year}-${mp.month}`) ?? 0;
+                return {
+                    ...mp,
+                    supplierInvoicesTotal,
+                    expensesTotal,
+                    netProfit: Math.round((mp.totalProfit - expensesTotal) * 100) / 100,
+                };
+            });
+            // Incluir meses que solo tienen facturas o gastos (sin ventas en DailyProfit)
+            const allExtraKeys = new Set([
+                ...supplierInvoicesByMonth.map((i) => `${i.year}-${i.month}`),
+                ...expensesByMonth.map((e) => `${e.year}-${e.month}`),
+            ]);
+            for (const key of allExtraKeys) {
                 if (!data.find((d) => `${d.year}-${d.month}` === key)) {
+                    const [y, m] = key.split('-').map(Number);
+                    const supplierInvoicesTotal = invoicesMap.get(key) ?? 0;
+                    const expensesTotal = expensesMap.get(key) ?? 0;
                     data.push({
-                        year: inv.year,
-                        month: inv.month,
+                        year: y,
+                        month: m,
                         totalBaseCost: 0,
                         totalSaleAmount: 0,
                         totalProfit: 0,
                         salesCount: 0,
                         daysWithSales: 0,
-                        supplierInvoicesTotal: inv.supplierInvoicesTotal,
+                        supplierInvoicesTotal,
+                        expensesTotal,
+                        netProfit: Math.round(-expensesTotal * 100) / 100,
                     });
                 }
             }
-            // Re-ordenar por año y mes descendente
             data.sort((a, b) => b.year - a.year || b.month - a.month);
             res.json({
                 success: true,

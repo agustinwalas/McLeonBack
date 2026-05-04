@@ -27,13 +27,16 @@ const afip_routes_1 = __importDefault(require("./routes/afip.routes"));
 const note_routes_1 = __importDefault(require("./routes/note.routes"));
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
 const dailyProfit_routes_1 = __importDefault(require("./routes/dailyProfit.routes"));
+const expense_routes_1 = __importDefault(require("./routes/expense.routes"));
 const dailyProfitCron_1 = require("./services/dailyProfitCron");
 const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
 // Configuración de Socket.io con CORS
 const allowedOrigins = [
     process.env.CLIENT_ORIGIN,
-    'http://localhost:5173'
+    'https://distribuidora-mcleon.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
 ].filter((origin) => typeof origin === 'string');
 const io = new socket_io_1.Server(server, {
     cors: {
@@ -71,6 +74,7 @@ app.use("/api/afip", afip_routes_1.default);
 app.use("/api/notes", note_routes_1.default);
 app.use("/api/dashboard", dashboard_routes_1.default);
 app.use("/api/daily-profits", dailyProfit_routes_1.default);
+app.use("/api/expenses", expense_routes_1.default);
 // ==============================
 //  CONEXIÓN A MONGODB
 // ==============================

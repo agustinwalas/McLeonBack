@@ -24,6 +24,7 @@ import afipRoutes from "./routes/afip.routes";
 import noteRoutes from "./routes/note.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import dailyProfitRoutes from "./routes/dailyProfit.routes";
+import expenseRoutes from "./routes/expense.routes";
 import { initDailyProfitCron } from "./services/dailyProfitCron";
 
 const app = express();
@@ -79,6 +80,7 @@ app.use("/api/afip", afipRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/daily-profits", dailyProfitRoutes);
+app.use("/api/expenses", expenseRoutes);
 
 // ==============================
 //  CONEXIÓN A MONGODB

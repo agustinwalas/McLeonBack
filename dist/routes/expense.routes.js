@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const expense_controller_1 = require("../controllers/expense.controller");
+const verifyToken_1 = require("../middleware/verifyToken");
+const router = (0, express_1.Router)();
+router.get("/", verifyToken_1.verifyToken, expense_controller_1.getAllExpenses);
+router.post("/", verifyToken_1.verifyToken, expense_controller_1.createExpense);
+router.put("/:id", verifyToken_1.verifyToken, expense_controller_1.updateExpense);
+router.delete("/:id", verifyToken_1.verifyToken, expense_controller_1.deleteExpense);
+exports.default = router;
