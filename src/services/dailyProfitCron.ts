@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { DailyProfitController } from '../controllers/dailyProfit.controller';
 import DailyProfit from '../models/DailyProfit';
 import Sale from '../models/Sale';
+import Product from '../models/Product';
 
 const normalize = (d: Date) => DailyProfitController.normalizeToUTCDay(d);
 
@@ -18,7 +19,9 @@ export function initDailyProfitCron() {
   cron.schedule('59 23 * * *', async () => {
     try {
       console.log('⏰ [CRON] Calculando ganancias del día...');
-      await DailyProfitController.saveDailyProfit(normalize(new Date()));
+      // A las 23:59 AR ya es el día siguiente en UTC, así que guardar solo "hoy"
+      // dejaba afuera el día real. Se recalculan los últimos 30 días, igual que al iniciar.
+      await fillMissingDays();
       console.log('✅ [CRON] Ganancias del día calculadas correctamente');
     } catch (error) {
       console.error('❌ [CRON] Error al calcular ganancias diarias:', error);
@@ -27,12 +30,51 @@ export function initDailyProfitCron() {
     timezone: 'America/Argentina/Buenos_Aires',
   });
 
-  // Al iniciar: verificar y completar días faltantes
-  fillMissingDays().catch((error) => {
+  // Al iniciar: guardar el costo en ventas recientes que no lo tengan y completar días faltantes
+  backfillRecentSaleCosts()
+    .catch((error) => console.error('❌ Error al guardar costos en ventas recientes:', error))
+    .then(() => fillMissingDays())
+    .catch((error) => {
     console.error('❌ Error al completar días faltantes:', error);
   });
 
   console.log('✅ Cron de ganancias diarias configurado (23:59 AR)');
+}
+
+/**
+ * Guarda el purchaseCost actual en los items de ventas de los últimos 30 días
+ * que no lo tengan (ventas creadas antes de que se guardara el costo en la venta).
+ * Las ventas más viejas no se tocan: su ganancia ya quedó registrada en DailyProfit.
+ */
+async function backfillRecentSaleCosts() {
+  const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  const sales = await Sale.find({
+    createdAt: { $gte: since },
+    'products.purchaseCost': { $exists: false },
+  }).select('products').lean();
+  if (sales.length === 0) return;
+
+  const productIds = [...new Set(sales.flatMap((s) => s.products.map((p) => String(p.product))))];
+  const products = await Product.find({ _id: { $in: productIds } }).select('purchaseCost').lean();
+  const costs = new Map(products.map((p: any) => [String(p._id), p.purchaseCost]));
+
+  const ops: any[] = [];
+  for (const sale of sales) {
+    const $set: Record<string, number> = {};
+    sale.products.forEach((item, i) => {
+      const cost = costs.get(String(item.product));
+      if (item.purchaseCost === undefined && cost !== undefined) {
+        $set[`products.${i}.purchaseCost`] = cost;
+      }
+    });
+    if (Object.keys($set).length > 0) {
+      ops.push({ updateOne: { filter: { _id: sale._id }, update: { $set } } });
+    }
+  }
+  if (ops.length > 0) {
+    await Sale.bulkWrite(ops);
+    console.log(`✅ Costo guardado en ${ops.length} ventas recientes`);
+  }
 }
 
 /**

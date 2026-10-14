@@ -88,6 +88,13 @@ const SaleSchema = new mongoose_1.Schema({
                 type: Number,
                 required: true,
                 min: 0
+            },
+            // Costo del producto al momento de la venta (para que la ganancia no cambie
+            // si después se actualiza el purchaseCost del producto)
+            purchaseCost: {
+                type: Number,
+                required: false,
+                min: 0
             }
         }],
     subtotal: {

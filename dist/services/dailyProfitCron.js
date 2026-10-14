@@ -9,6 +9,7 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const dailyProfit_controller_1 = require("../controllers/dailyProfit.controller");
 const DailyProfit_1 = __importDefault(require("../models/DailyProfit"));
 const Sale_1 = __importDefault(require("../models/Sale"));
+const Product_1 = __importDefault(require("../models/Product"));
 const normalize = (d) => dailyProfit_controller_1.DailyProfitController.normalizeToUTCDay(d);
 /**
  * Inicializa el cron job que calcula las ganancias diarias.
@@ -21,7 +22,9 @@ function initDailyProfitCron() {
     node_cron_1.default.schedule('59 23 * * *', async () => {
         try {
             console.log('⏰ [CRON] Calculando ganancias del día...');
-            await dailyProfit_controller_1.DailyProfitController.saveDailyProfit(normalize(new Date()));
+            // A las 23:59 AR ya es el día siguiente en UTC, así que guardar solo "hoy"
+            // dejaba afuera el día real. Se recalculan los últimos 30 días, igual que al iniciar.
+            await fillMissingDays();
             console.log('✅ [CRON] Ganancias del día calculadas correctamente');
         }
         catch (error) {
@@ -30,11 +33,48 @@ function initDailyProfitCron() {
     }, {
         timezone: 'America/Argentina/Buenos_Aires',
     });
-    // Al iniciar: verificar y completar días faltantes
-    fillMissingDays().catch((error) => {
+    // Al iniciar: guardar el costo en ventas recientes que no lo tengan y completar días faltantes
+    backfillRecentSaleCosts()
+        .catch((error) => console.error('❌ Error al guardar costos en ventas recientes:', error))
+        .then(() => fillMissingDays())
+        .catch((error) => {
         console.error('❌ Error al completar días faltantes:', error);
     });
     console.log('✅ Cron de ganancias diarias configurado (23:59 AR)');
+}
+/**
+ * Guarda el purchaseCost actual en los items de ventas de los últimos 30 días
+ * que no lo tengan (ventas creadas antes de que se guardara el costo en la venta).
+ * Las ventas más viejas no se tocan: su ganancia ya quedó registrada en DailyProfit.
+ */
+async function backfillRecentSaleCosts() {
+    const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    const sales = await Sale_1.default.find({
+        createdAt: { $gte: since },
+        'products.purchaseCost': { $exists: false },
+    }).select('products').lean();
+    if (sales.length === 0)
+        return;
+    const productIds = [...new Set(sales.flatMap((s) => s.products.map((p) => String(p.product))))];
+    const products = await Product_1.default.find({ _id: { $in: productIds } }).select('purchaseCost').lean();
+    const costs = new Map(products.map((p) => [String(p._id), p.purchaseCost]));
+    const ops = [];
+    for (const sale of sales) {
+        const $set = {};
+        sale.products.forEach((item, i) => {
+            const cost = costs.get(String(item.product));
+            if (item.purchaseCost === undefined && cost !== undefined) {
+                $set[`products.${i}.purchaseCost`] = cost;
+            }
+        });
+        if (Object.keys($set).length > 0) {
+            ops.push({ updateOne: { filter: { _id: sale._id }, update: { $set } } });
+        }
+    }
+    if (ops.length > 0) {
+        await Sale_1.default.bulkWrite(ops);
+        console.log(`✅ Costo guardado en ${ops.length} ventas recientes`);
+    }
 }
 /**
  * Verifica si hay días sin registro desde la primera venta hasta hoy

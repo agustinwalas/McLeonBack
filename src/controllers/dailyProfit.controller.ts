@@ -43,9 +43,11 @@ export class DailyProfitController {
       totalSaleAmount += sale.totalAmount || 0;
 
       for (const item of sale.products) {
+        // Usar el costo guardado en la venta; si es una venta vieja sin costo, el actual del producto
         const product = item.product as any;
-        if (product && product.purchaseCost !== undefined) {
-          totalBaseCost += product.purchaseCost * item.quantity;
+        const cost = item.purchaseCost ?? product?.purchaseCost;
+        if (cost !== undefined) {
+          totalBaseCost += cost * item.quantity;
         }
       }
     }

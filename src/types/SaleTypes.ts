@@ -27,6 +27,7 @@ export interface ISaleProduct {
   unitPrice: number; // Precio al momento de la venta
   discountPercentage: number; // Default 100%, si es 90% = 10% descuento
   subtotal: number;
+  purchaseCost?: number; // Costo del producto al momento de la venta
 }
 
 export interface IDeliveryAddress {

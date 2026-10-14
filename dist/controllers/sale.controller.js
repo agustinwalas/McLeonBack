@@ -55,6 +55,8 @@ class SaleController {
                 return;
             }
             // Validar que cada producto existe en la base de datos
+            // y guardar su costo actual en el item de la venta
+            const productsWithCost = [];
             for (const productItem of products) {
                 if (!productItem.product || !productItem.quantity) {
                     res
@@ -69,12 +71,13 @@ class SaleController {
                         .json({ message: `Producto ${productItem.product} no encontrado` });
                     return;
                 }
+                productsWithCost.push({ ...productItem, purchaseCost: product.purchaseCost });
             }
             // Crear objeto de venta
             const saleData = {
                 user: user,
                 client: client,
-                products: products,
+                products: productsWithCost,
                 subtotal: subtotal,
                 totalAmount: totalAmount,
                 amountPaid: req.body.amountPaid || 0,
@@ -107,6 +110,26 @@ class SaleController {
     // PUT - Actualizar venta
     static async updateSale(req, res) {
         try {
+            // Si se editan los productos, conservar el costo original de cada item
+            // (o tomar el costo actual si es un producto nuevo en la venta)
+            if (Array.isArray(req.body.products)) {
+                const existingSale = await Sale_1.default.findById(req.params.id).lean();
+                const previousCosts = new Map();
+                for (const item of existingSale?.products ?? []) {
+                    if (item.purchaseCost !== undefined) {
+                        previousCosts.set(String(item.product), item.purchaseCost);
+                    }
+                }
+                req.body.products = await Promise.all(req.body.products.map(async (item) => {
+                    const productId = String(item.product?._id ?? item.product);
+                    let purchaseCost = item.purchaseCost ?? previousCosts.get(productId);
+                    if (purchaseCost === undefined) {
+                        const product = await Product_1.default.findById(productId).select("purchaseCost").lean();
+                        purchaseCost = product?.purchaseCost;
+                    }
+                    return { ...item, product: productId, purchaseCost };
+                }));
+            }
             const updatedSale = await Sale_1.default.findByIdAndUpdate(req.params.id, req.body, { new: true })
                 .populate("client")
                 .populate("user")
