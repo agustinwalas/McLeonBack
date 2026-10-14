@@ -101,21 +101,29 @@ async function fillMissingDays() {
     // Obtener fechas ya registradas usando clave UTC YYYY-MM-DD
     const existingDays = await DailyProfit.find({
       date: { $gte: startDate, $lte: today },
-    }).select('date').lean();
+    }).select('date salesCount').lean();
 
-    const existingDatesSet = new Set(
-      existingDays.map((d) => d.date.toISOString().split('T')[0])
+    const existingCounts = new Map(
+      existingDays.map((d) => [d.date.toISOString().split('T')[0], d.salesCount])
     );
+
+    // Cantidad real de ventas por día (UTC), para detectar días guardados con datos incorrectos
+    const realCountsAgg = await Sale.aggregate([
+      { $match: { status: { $ne: 'CANCELLED' }, createdAt: { $gte: startDate } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+    ]);
+    const realCounts = new Map(realCountsAgg.map((d) => [d._id as string, d.count as number]));
 
     let processed = 0;
     let currentDate = new Date(startDate);
 
     while (currentDate <= today) {
       const dateStr = currentDate.toISOString().split('T')[0];
-      const isMissing = !existingDatesSet.has(dateStr);
+      const isMissing = !existingCounts.has(dateStr);
+      const isOutdated = existingCounts.get(dateStr) !== (realCounts.get(dateStr) ?? 0);
       const isRecent = currentDate >= recentThreshold;
 
-      if (isMissing || isRecent) {
+      if (isMissing || isOutdated || isRecent) {
         await DailyProfitController.saveDailyProfit(new Date(currentDate));
         processed++;
       }
