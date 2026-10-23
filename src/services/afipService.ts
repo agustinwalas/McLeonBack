@@ -250,6 +250,8 @@ class AfipService {
         Concepto: invoiceData.concepto,
         DocTipo: invoiceData.documentoTipo,
         DocNro: parseInt(invoiceData.documentoNumero),
+        // parche: 5 = Consumidor Final solo si DocTipo es 99; con otro DocTipo falta la condición frente al IVA del cliente
+        ...(Number(invoiceData.documentoTipo) === 99 ? { CondicionIVAReceptorId: 5 } : {}),
         CbteDesde: nextNumber,
         CbteHasta: nextNumber,
         CbteFch: parseInt(invoiceData.fechaEmision.replace(/-/g, "")),
@@ -494,6 +496,8 @@ class AfipService {
         Concepto: noteData.concepto,
         DocTipo: noteData.documentoTipo,
         DocNro: parseInt(noteData.documentoNumero),
+        // parche: 5 = Consumidor Final solo si DocTipo es 99; con otro DocTipo falta la condición frente al IVA del cliente
+        ...(Number(noteData.documentoTipo) === 99 ? { CondicionIVAReceptorId: 5 } : {}),
         CbteDesde: nextNumber,
         CbteHasta: nextNumber,
         CbteFch: parseInt(noteData.fechaEmision.replace(/-/g, "")),
@@ -590,6 +594,8 @@ class AfipService {
         Concepto: noteData.concepto,
         DocTipo: noteData.documentoTipo,
         DocNro: parseInt(noteData.documentoNumero),
+        // parche: 5 = Consumidor Final solo si DocTipo es 99; con otro DocTipo falta la condición frente al IVA del cliente
+        ...(Number(noteData.documentoTipo) === 99 ? { CondicionIVAReceptorId: 5 } : {}),
         CbteDesde: nextNumber,
         CbteHasta: nextNumber,
         CbteFch: parseInt(noteData.fechaEmision.replace(/-/g, "")),
